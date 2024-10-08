@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
     const articleStreamList = []
     const articleIdsList = []
 
-    for (const link of sourceLinks.split(',')) {
+    await Promise.all(sourceLinks.split(',').map(async (link) => {
         try {
             const htmlPage = await fetch(link).then((response) => response.text());
             const doc = new JSDOM(htmlPage, {
@@ -34,14 +34,13 @@ export default defineEventHandler(async (event) => {
             const article = reader.parse();
             const articleBlob = new Blob([article?.content], { type: 'text/html' });
             const articleFile = new File([articleBlob], `${article?.title}.html`, { type: 'text/html' });
-    
+
             articleStreamList.push(articleFile);
             articleIdsList.push(article?.title);
         } catch (error) {
             console.error(`Failed to fetch or parse article from link: ${link}`, error);
-            continue;
         }
-    }
+    }));
 
     await client.beta.vectorStores.fileBatches.uploadAndPoll(vectorStore.id, {files: articleStreamList});
 
