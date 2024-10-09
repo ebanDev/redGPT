@@ -21,16 +21,21 @@ const query = ref<string>('');
         </div>
     </UModal>
 
-    <main class="flex flex-col items-center justify-center h-screen gap-4">
-        <h1 class="text-4xl font-bold text-center text-gray-900">
-            redGPT
+    <main class="flex flex-col items-center justify-center h-screen gap-4 pb-8 max-w-96 mx-auto">
+        <h1 class="text-5xl font-bold text-center">
+            redGPT<span class="text-red-700 text-8xl">.</span>
         </h1>
-        <UInput v-model="query" />
-        <UButton @click="navigateTo('/search?q=' + query)" class="mt-4">
+        <p class="pb-4">
+            Search the web or deep dive into a topic with a socialist point of view. 
+        </p>
+        <UInput v-model="query" icon="i-tabler-search" placeholder="Genesis of the modern State" />
+        <div class="flex gap-4">
+            <UButton @click="navigateTo('/search?q=' + query)" class="mt-4" icon="i-tabler-world-search">
             Search
         </UButton>
-        <UButton @click="navigateTo('/article?q=' + query)" class="mt-4">
-            Read
+        <UButton @click="navigateTo('/article?q=' + query)" class="mt-4" icon="i-tabler-article">
+            Deep dive
         </UButton>
+        </div>
     </main>
 </template>

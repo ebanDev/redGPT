@@ -5,37 +5,46 @@ const { apiKeys } = storeToRefs(apiKeysStore);
 const query = useRoute().query.q
 const results = ref([])
 
-if (typeof(query) === "string") {
+if (typeof (query) === "string") {
     const { data } = await useFetch(`/api/search?query=${query}&summary=true&exaApiKey=${apiKeys.value.exa}`)
     results.value = data.value
 } else {
     navigateTo("/")
 }
+
+const search = () => {
+    navigateTo('/search?q=' + query)
+}
 </script>
 
 <template>
-    <h1 class="text-4xl font-bold text-center text-gray-900">
-        Results for: {{ query }}
-    </h1>
-    <div class="flex gap-8 flex-wrap flex-align justify-center">
-        <UCard v-for="result of results" class="w-1/4">
-            <template #header>
-                <h2 class="text-xl font-bold">
+    <main class="container mx-auto p-4 max-w-4xl">
+        <h1 class="text-5xl font-bold text-center mb-8">
+            redGPT<span class="text-red-700 text-8xl">.</span>
+        </h1>
+        <div class="mb-4 flex gap-4 justify-center items-center flex-wrap sm:flex-nowrap">
+            <UInput v-model="query" icon="i-tabler-world-search" class="w-full" />
+            <UButton @click="navigateTo('/search?q=' + query)" icon="i-tabler-world-search">
+                Search
+            </UButton>
+            <UButton @click="navigateTo('/article?q=' + query)" icon="i-tabler-article">
+                Deep dive
+            </UButton>
+        </div>
+        <div>
+            <div v-for="result in results" :key="result.id" class="border-b py-4 flex gap-2 flex-col">
+                <a :href="result.url" class="text-xl font-bold hover:underline">
                     {{ result.title }}
-                </h2>
-            </template>
-            <p>
-                {{ result.summary }}
-            </p>
-            <template #footer>
-                <div class="flex gap-2">
-                    <span>{{ new Date(result.publishedDate).toLocaleDateString('en-US', {
-                        year: 'numeric', month:
-                            'long', day: 'numeric'
-                    }) }}</span>
-                    <span>{{ result.author }}</span>
-                </div>
-            </template>
-        </UCard>
-    </div>
+                </a>
+                <p class="text-sm text-gray-600">
+                    {{ new Date(result.publishedDate).toLocaleDateString('en-US', {
+                        year: 'numeric', month: 'long', day: 'numeric'
+                    }) }} - {{ result.author }} - {{ result.url.split('/')[2] }}
+                </p>
+                <p class="text-gray-800">
+                    {{ result.summary }}
+                </p>
+            </div>
+        </div>
+    </main>
 </template>
