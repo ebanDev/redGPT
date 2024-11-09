@@ -24,7 +24,7 @@ onMounted(async () => {
 
             currentAnimationStep.value = "text"
             const sourceLinks = searchData.value.map(result => encodeURIComponent(result.url))
-            const eventSource = new EventSource('http://localhost:3000/api/generateArticle?query=' + query + '&sourceLinks=' + sourceLinks + '&openaiApiKey=' + apiKeys.value.OpenAI + '&lang=' + useRoute().query.articleLang + '&length=' + useRoute().query.articleLength)
+            const eventSource = new EventSource('/api/generateArticle?query=' + query + '&sourceLinks=' + sourceLinks + '&openaiApiKey=' + apiKeys.value.OpenAI + '&lang=' + useRoute().query.articleLang + '&length=' + useRoute().query.articleLength)
 
             eventSource.onmessage = (event) => {
                 const eventType = event.data.split(": ")[0]
@@ -59,7 +59,7 @@ onMounted(async () => {
 const submitFollowUp = async () => {
     currentAnimationStep.value = "text"
 
-    const eventSource = new EventSource('http://localhost:3000/api/continueArticle?threadId=' + threadId.value + '&openaiApiKey=' + apiKeys.value.OpenAI + '&followUp=' + followUpQuery.value)
+    const eventSource = new EventSource('/api/continueArticle?threadId=' + threadId.value + '&openaiApiKey=' + apiKeys.value.OpenAI + '&followUp=' + followUpQuery.value)
 
     eventSource.onmessage = (event) => {
         const eventType = event.data.split(": ")[0]
