@@ -20,7 +20,6 @@ export default defineEventHandler(async (event) => {
         query[key] = decodeURIComponent(value)
     })
 
-    console.time('Total Time');
     const sourceLinks = query.sourceLinks;
     let openaiApiKey = query.openaiApiKey;
     const userQuery = query.query;
@@ -35,38 +34,29 @@ export default defineEventHandler(async (event) => {
         }
     }
 
-    console.time('OpenAI Client Initialization');
     const client = new OpenAI({
         apiKey: openaiApiKey,
     });
-    console.timeEnd('OpenAI Client Initialization');
 
-    console.time('Vector Store Creation');
     const vectorStore = await client.beta.vectorStores.create({
         name: userQuery.replace(/[^a-zA-Z0-9]/g, ''),
     });
-    console.timeEnd('Vector Store Creation');
 
     const articleStreamList = [];
     const articleIdsList = [];
 
-    console.time('Fetch and Parse Articles');
     await Promise.all(sourceLinks.split(',').map(async (link) => {
         try {
-            console.time(`Fetch ${link}`);
             eventStream.send();
             const htmlPage = await Promise.race([
                 fetch(link).then((response) => response.text()),
                 new Promise((_, reject) => setTimeout(() => reject(new Error('Fetch timeout')), 3000))
             ]);
-            console.timeEnd(`Fetch ${link}`);
             eventStream.push(`info: Fetching and parsing article from link: ${link}`);
 
-            console.time(`Parse ${link}`);
             const doc = new JSDOM(htmlPage, { url: link });
             const reader = new Readability(doc.window.document);
             const article = reader.parse();
-            console.timeEnd(`Parse ${link}`);
 
             const articleBlob = new Blob([article?.content], { type: 'text/html' });
             let sanitizedTitle = article?.title?.toLowerCase().replace(/[^a-z-_]/g, '') || `random-${Math.random().toString(36).substring(2, 15)}`;
@@ -79,32 +69,22 @@ export default defineEventHandler(async (event) => {
             console.error(`Failed to fetch or parse article from link: ${link}`, error);
         }
     }));
-    console.timeEnd('Fetch and Parse Articles');
 
     eventStream.push(`info: Uploading articles to AI Engine.`);
     eventStream.send();
-    console.time('File Batch Upload');
     await client.beta.vectorStores.fileBatches.uploadAndPoll(vectorStore.id, { files: articleStreamList });
-    console.timeEnd('File Batch Upload');
 
     eventStream.push(`info: Updating Assistant with new vector store.`);
     eventStream.send();
-    console.time('Update Assistant');
     await client.beta.assistants.update("asst_t8CuPPNq4g2XO3vPha2XOuw4", {
         tool_resources: { file_search: { vector_store_ids: [vectorStore.id] } },
     });
-    console.timeEnd('Update Assistant');
 
     eventStream.push(`info: Creating new AI writing session.`);
     eventStream.send();
-    console.time('Create Thread');
     const thread = await client.beta.threads.create({
         messages: [{ role: "user", content: `Write a ${articleLength} article about the following topic : ${userQuery} in ${articleLanguage} based on the sources of your knowledge base, you should always cite your sources. This article should have a materialist point of view and a deep clever analysis of the topic. You can use all of Markdown features to make it more pleasant to read.` }],
     });
-    console.timeEnd('Create Thread');
-
-    console.timeEnd('Total Time');
-
     eventStream.push(`info: Writing article.`);
     eventStream.push(`step: none`)
     eventStream.push(`threadId: ${thread.id}`)
