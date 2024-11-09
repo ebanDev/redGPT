@@ -1,17 +1,38 @@
 import OpenAI from 'openai';
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
+import { getServerSession } from '#auth'
 
 export default defineEventHandler(async (event) => {
-    const query = getQuery(event);
-    
+    const eventStream = createEventStream(event)
+
+    eventStream.push('info: Starting article writing process.')
+    eventStream.onClosed(async () => {
+        await eventStream.close()
+    })
+    const session = await getServerSession(event)
+    const queryUrl = event.node.req.url
+    const querystring = queryUrl.split('?')[1]
+    const queryArgs = querystring.split('&')
+    let query = {}
+    queryArgs.forEach((arg) => {
+        const [key, value] = arg.split('=')
+        query[key] = decodeURIComponent(value)
+    })
+
     console.time('Total Time');
     const sourceLinks = query.sourceLinks;
-    const openaiApiKey = query.openaiApiKey;
+    let openaiApiKey = query.openaiApiKey;
     const userQuery = query.query;
+    const articleLanguage = query.lang;
+    const articleLength = query.articleLength;
 
     if (!openaiApiKey) {
-        return `No API Key provided`;
+        if (!session) {
+            return { status: 'unauthenticated!' }
+        } else {
+            openaiApiKey = process.env.OPENAI_API_KEY;
+        }
     }
 
     console.time('OpenAI Client Initialization');
@@ -33,8 +54,13 @@ export default defineEventHandler(async (event) => {
     await Promise.all(sourceLinks.split(',').map(async (link) => {
         try {
             console.time(`Fetch ${link}`);
-            const htmlPage = await fetch(link).then((response) => response.text());
+            eventStream.send();
+            const htmlPage = await Promise.race([
+                fetch(link).then((response) => response.text()),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Fetch timeout')), 3000))
+            ]);
             console.timeEnd(`Fetch ${link}`);
+            eventStream.push(`info: Fetching and parsing article from link: ${link}`);
 
             console.time(`Parse ${link}`);
             const doc = new JSDOM(htmlPage, { url: link });
@@ -45,7 +71,7 @@ export default defineEventHandler(async (event) => {
             const articleBlob = new Blob([article?.content], { type: 'text/html' });
             let sanitizedTitle = article?.title?.toLowerCase().replace(/[^a-z-_]/g, '') || `random-${Math.random().toString(36).substring(2, 15)}`;
             const articleFile = new File([articleBlob], `${sanitizedTitle}.html`, { type: 'text/html' });
-            
+
             articleStreamList.push(articleFile);
             articleIdsList.push(article?.title);
 
@@ -55,22 +81,52 @@ export default defineEventHandler(async (event) => {
     }));
     console.timeEnd('Fetch and Parse Articles');
 
+    eventStream.push(`info: Uploading articles to AI Engine.`);
+    eventStream.send();
     console.time('File Batch Upload');
     await client.beta.vectorStores.fileBatches.uploadAndPoll(vectorStore.id, { files: articleStreamList });
     console.timeEnd('File Batch Upload');
 
+    eventStream.push(`info: Updating Assistant with new vector store.`);
+    eventStream.send();
     console.time('Update Assistant');
     await client.beta.assistants.update("asst_t8CuPPNq4g2XO3vPha2XOuw4", {
         tool_resources: { file_search: { vector_store_ids: [vectorStore.id] } },
     });
     console.timeEnd('Update Assistant');
 
+    eventStream.push(`info: Creating new AI writing session.`);
+    eventStream.send();
     console.time('Create Thread');
     const thread = await client.beta.threads.create({
-        messages: [{ role: "user", content: userQuery }],
+        messages: [{ role: "user", content: `Write a ${articleLength} article about the following topic : ${userQuery} in ${articleLanguage} based on the sources of your knowledge base. This article should have a materialist point of view of the topic. You can use all of Markdown features to make it more pleasant to read.` }],
     });
     console.timeEnd('Create Thread');
-    
+
     console.timeEnd('Total Time');
-    return thread.id;
+
+    eventStream.push(`info: Writing article.`);
+    eventStream.push(`step: none`)
+    eventStream.push(`threadId: ${thread.id}`)
+    eventStream.send();
+    
+
+    const stream = await client.beta.threads.runs
+        .create(thread.id, {
+            assistant_id: "asst_t8CuPPNq4g2XO3vPha2XOuw4",
+            stream: true
+        })
+
+    for await (const event of stream) {
+        if (event.event === "thread.message.delta") {
+            if (event.data.delta.content[0].text.annotations) {
+                eventStream.push('content: ' + event.data.delta.content[0].text.value.replace(/†source/g, "").replace(/【/g, "[").replace(/】/g, "]"))
+                eventStream.send()
+            } else {
+                eventStream.push('content: ' + event.data.delta.content[0].text.value)
+                eventStream.send()
+            }
+        }
+    }
+    return eventStream.send()
 });

@@ -2,6 +2,8 @@
 import OpenAI from 'openai';
 import VueMarkdown from 'vue-markdown-render';
 
+const toast = useToast()
+
 const apiKeysStore = useApiKeysStore();
 const { apiKeys } = storeToRefs(apiKeysStore);
 
@@ -17,35 +19,33 @@ onMounted(async () => {
         if (typeof (query) === "string") {
 
             currentAnimationStep.value = "search"
-            const { data: searchData } = await useFetch(`/api/search?query=${query}&summary=false&exaApiKey=${apiKeys.value.exa}`)
+            const { data: searchData } = await useFetch(`/api/search?query=${query}&summary=false&exaApiKey=${apiKeys.value.exa}&lang=${useRoute().query.searchLang}`)
             results.value = searchData.value
 
             currentAnimationStep.value = "text"
             const sourceLinks = searchData.value.map(result => encodeURIComponent(result.url))
-            const { data: articleData } = await useFetch(`/api/generateArticle?query=${query}&sourceLinks=${sourceLinks}&openaiApiKey=${apiKeys.value.OpenAI}`)
-            threadId.value = articleData.value
-            const client = new OpenAI({
-                apiKey: apiKeys.value.OpenAI,
-                dangerouslyAllowBrowser: true
-            });
+            const eventSource = new EventSource('http://localhost:3000/api/generateArticle?query=' + query + '&sourceLinks=' + sourceLinks + '&openaiApiKey=' + apiKeys.value.OpenAI + '&lang=' + useRoute().query.articleLang + '&length=' + useRoute().query.articleLength)
 
+            eventSource.onmessage = (event) => {
+                const eventType = event.data.split(": ")[0]
+                const eventData = event.data.split(": ")[1]
 
-            const stream = await client.beta.threads.runs
-                .create(threadId.value, {
-                    assistant_id: "asst_t8CuPPNq4g2XO3vPha2XOuw4",
-                    stream: true
-                })
-
-            currentAnimationStep.value = "none"
-
-            for await (const event of stream) {
-                console.log(event)
-                if (event.event === "thread.message.delta") {
-                    if (event.data.delta.content[0].text.annotations) {
-                        article.value += event.data.delta.content[0].text.value.replace(/†source/g, "").replace(/【/g, "[").replace(/】/g, "]")
-                    } else {
-                        article.value += event.data.delta.content[0].text.value
+                if (eventType === "info") {
+                    toast.add({
+                        title: event.data,
+                    })
+                } else if (eventType === "content") {
+                    if (eventData.startsWith("#")) {
+                        article.value += "\n"
                     }
+                    article.value += eventData
+                    if (eventData === "") {
+                        article.value += "\n"
+                    }
+                } else if (eventType === "step") {
+                    currentAnimationStep.value = eventData
+                } else if (eventType === "threadId") {
+                    threadId.value = eventData
                 }
             }
         } else {
@@ -59,68 +59,49 @@ onMounted(async () => {
 const submitFollowUp = async () => {
     currentAnimationStep.value = "text"
 
-    const client = new OpenAI({
-        apiKey: apiKeys.value.OpenAI,
-        dangerouslyAllowBrowser: true
-    });
+    const eventSource = new EventSource('http://localhost:3000/api/continueArticle?threadId=' + threadId.value + '&openaiApiKey=' + apiKeys.value.OpenAI + '&followUp=' + followUpQuery.value)
 
-    const message = await client.beta.threads.messages
-        .create(threadId.value, {
-            role: "user",
-            content: followUpQuery.value,
-        });
+    eventSource.onmessage = (event) => {
+        const eventType = event.data.split(": ")[0]
+        const eventData = event.data.split(": ")[1]
 
-    const stream = await client.beta.threads.runs
-        .create(threadId.value, {
-            assistant_id: "asst_t8CuPPNq4g2XO3vPha2XOuw4",
-            stream: true
-        })
-
-    article.value += "\n \n # 🗣️ " + followUpQuery.value + "\n"
-    currentAnimationStep.value = "none"
-
-    for await (const event of stream) {
-        if (event.event === "thread.message.delta") {
-            if (event.data.delta.content[0].text.annotations) {
-                article.value += event.data.delta.content[0].text.value.replace(/†source/g, "").replace(/【/g, "[").replace(/】/g, "]")
-            } else {
-                article.value += event.data.delta.content[0].text.value
+        if (eventType === "info") {
+            toast.add({
+                title: event.data,
+            })
+        } else if (eventType === "content") {
+            if (eventData.startsWith("#")) {
+                article.value += "\n"
             }
+            article.value += eventData
+            if (eventData === "") {
+                article.value += "\n"
+            }
+        } else if (eventType === "step") {
+            currentAnimationStep.value = eventData
         }
     }
-
-    followUpQuery.value = ""
 }
 </script>
 
 <template>
     <main class="container mx-auto p-4 max-w-4xl">
-        <h1 class="text-5xl font-bold text-center mb-8">
-            redGPT<span class="text-red-700 text-8xl">.</span>
-        </h1>
-        <div class="mb-4 flex gap-4 justify-center items-center flex-wrap sm:flex-nowrap">
-            <UInput v-model="query" icon="i-tabler-search" class="w-full" />
-            <UButton @click="navigateTo('/search?q=' + query)" icon="i-tabler-world-search">
-                Search
-            </UButton>
-            <UButton @click="navigateTo('/article?q=' + query)" icon="i-tabler-article">
-                Deep dive
-            </UButton>
-        </div>
+        <Header />
+        <SearchBar :query="query" :inline="true" />
         <h2 class="text-2xl font-bold mb-4 flex items-center gap-1 mt-8">
             <UIcon name="i-tabler-link" /> Sources
         </h2>
         <div class="flex gap-4 p-1 overflow-x-scroll">
-            <UCard v-for="result in results" :key="result.id" class="w-64 flex-shrink-0 flex flex-col justify-between"
+            <UCard v-for="result in results" :key="result.id" class="w-64 shrink-0 flex flex-col justify-between"
                 v-if="results.length > 0">
                 <a :href="result.url" class="text-base font-bold hover:underline line-clamp-2 mb-auto">
                     {{ result.title }}
                 </a>
-                <p class="text-sm text-gray-600 mt-auto h-max">
+                <p class="text-sm text-gray-600 mt-auto h-max text-wrap">
                     {{ result.author }} <br> {{ result.url.split('/')[2] }}
                 </p>
             </UCard>
-            <UCard v-for="n in 10" :key="n" class="w-64 h-32 flex-shrink-0 flex flex-col justify-between"
+            <UCard v-for="n in 10" :key="n" class="w-64 h-32 shrink-0 flex flex-col justify-between"
                 v-if="results.length === 0">
                 <writing-animation class="h-20" currentStep="search" />
             </UCard>
