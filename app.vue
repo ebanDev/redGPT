@@ -35,3 +35,15 @@ body {
   background-color: #c00007;
 }
 </style>
+
+<script setup lang="ts">
+useHead({
+  title: 'redGPT',
+  meta: [
+    {
+      name: 'description',
+      content: 'A materialist search engine'
+    }
+  ]
+})
+</script>
