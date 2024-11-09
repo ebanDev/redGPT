@@ -99,7 +99,7 @@ export default defineEventHandler(async (event) => {
     eventStream.send();
     console.time('Create Thread');
     const thread = await client.beta.threads.create({
-        messages: [{ role: "user", content: `Write a ${articleLength} article about the following topic : ${userQuery} in ${articleLanguage} based on the sources of your knowledge base. This article should have a materialist point of view of the topic. You can use all of Markdown features to make it more pleasant to read.` }],
+        messages: [{ role: "user", content: `Write a ${articleLength} article about the following topic : ${userQuery} in ${articleLanguage} based on the sources of your knowledge base, you should always cite your sources. This article should have a materialist point of view and a deep clever analysis of the topic. You can use all of Markdown features to make it more pleasant to read.` }],
     });
     console.timeEnd('Create Thread');
 

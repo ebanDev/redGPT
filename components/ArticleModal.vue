@@ -169,7 +169,7 @@ const article_lengths = ref([
 const navigateToArticle = async () => {
   return new Promise<void>(async (resolve, reject) => {
     try {
-      await navigateTo('/article?q=' + searchQuery.value + '&searchLang=' + userPrefs.language + '&articleLang=' + userPrefs.articleLanguage + '&articleLength=' + userPrefs.articleLength)
+      await navigateTo('/article?q=' + searchQuery.value + '&searchLang=' + userPrefs.searchLanguage + '&articleLang=' + userPrefs.articleLanguage + '&articleLength=' + userPrefs.articleLength)
       modal.close()
       resolve()
     } catch (error) {
