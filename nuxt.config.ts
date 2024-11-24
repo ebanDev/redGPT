@@ -23,5 +23,9 @@ export default defineNuxtConfig({
     experimental: {
       websocket: true
     },
+  },
+
+  colorMode: {
+    preference: 'light'
   }
 })

@@ -84,7 +84,7 @@ export default defineEventHandler(async (event) => {
     eventStream.push(`info: Creating new AI writing session.`);
     eventStream.send();
     const thread = await client.beta.threads.create({
-        messages: [{ role: "user", content: `Write a ${articleLength} article about the following topic : ${userQuery} in ${articleLanguage} based on the sources of your knowledge base, you should always cite your sources. This article should have a marxist materialist point of view and a deep clever analysis of the topic. You can use all of Markdown features to make it more pleasant to read.` }],
+        messages: [{ role: "user", content: `Write a ${articleLength} article about the following topic : ${userQuery} in ${articleLanguage} based on the sources of your knowledge base, you should always cite your sources. This article should have a marxist/materialist point of view if relevant and a deep clever analysis of the topic, but this analysis has to be subtle and scientific, you are not writing propaganda rather scientific articles. You can use all of Markdown features to make it more pleasant to read.` }],
     });
     eventStream.push(`info: Writing article.`);
     eventStream.push(`step: none`)
